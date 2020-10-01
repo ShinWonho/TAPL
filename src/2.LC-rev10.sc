@@ -50,6 +50,7 @@ def ZeroPair(): term = App(App(Pair(), Church(0)), Church(0))
 def SuccPair(): term = Fun("p", App(App(Pair(), App(Second(), Var("p"))), App(Succ(), App(Second(), Var("p")))))
 def Pred(): term = Fun("m", App(First(), App(App(Var("m"), SuccPair()), ZeroPair())))
 def Sub(): term = Fun("m", Fun("n", App(App(Var("n"), Pred()), Var("m"))))
+def Equal(): term = Fun("m", Fun("n", App(App(And(), App(IsZero(), App(App(Sub(), Var("m")), Var("n")))), App(IsZero(), App(App(Sub(), Var("n")), Var("m"))))))
 
 //find free variables
 
@@ -137,10 +138,10 @@ def rec_helper(bv: Set[String], fv: Set[String], l: List[String], t: term): term
 
 //find bv in t and change the bvs that makes bv not equals to fv and restrict
 
-def rename(t: term, restriction: term, restrict: String) : term = {
+def rename(t: term, restriction: term) : term = {
   val bv = BV(t)
   val fv = FV(restriction)
-  rec_helper(bv, fv  + restrict, bv.intersect(fv).toList, t)
+  rec_helper(bv, fv, bv.intersect(fv).toList, t)
 }
 
 //substitute the terms in t1 from "from" to "to"
@@ -182,7 +183,12 @@ def small_step(t:term):term = t match {
   }
   case AppStep1(f, t) => f match {
     case Var(_) => AppStep2(f, t)
-    case FunStep1(x, ft) => substitute(rename(ft, t, x), Var(x), t)
+    case FunStep1(_, _) =>
+      rename(f, t) match {
+        case FunStep1(x, ft) => substitute(ft, Var(x), t)
+        case _ => Var("Wrong")
+      }
+//      substitute(rename(ft, t, x), Var(x), t)
     case AppStep2(_, _) => AppStep2(f, t)
     case _ => AppStep1(small_step(f), t)
   }
@@ -208,10 +214,10 @@ def concrete(t:term):String = t match {
 def big_step(t:term):String = {
   var prev = t
   var res = t
-  //  var cnt = 0
+//    var cnt = 0
   do {
-    //    println(cnt + ": " + concrete(res))
-    //    cnt = cnt + 1
+//        println(cnt + ": " + concrete(res))
+//        cnt = cnt + 1
     do {
       prev = res
       res = small_step(prev)
@@ -282,14 +288,24 @@ big_step(App(App(Power(), Church(2)), Church(2)))
 //Four
 big_step(App(App(Power(), Church(3)), Church(2)))
 //Nine
+
 big_step(App(IsZero(), Church(0)))
 //True
 big_step(App(IsZero(), Church(4)))
 //False
-
 big_step(App(Pred(), Church(0)))
 //Zero
 big_step(App(Pred(), Church(4)))
 //Four
 big_step(App(App(Sub(), Church(7)), Church(2)))
 //Five
+big_step(App(App(Sub(), Church(3)), Church(5)))
+//Zero
+big_step(App(App(Equal(), Church(0)), Church(0)))
+//True
+big_step(App(App(Equal(), Church(5)), Church(5)))
+//True
+big_step(App(App(Equal(), Church(3)), Church(8)))
+//False
+big_step(App(App(Equal(), Church(10)), Church(6)))
+//False
