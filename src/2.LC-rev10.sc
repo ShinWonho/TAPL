@@ -52,6 +52,14 @@ def Pred(): term = Fun("m", App(First(), App(App(Var("m"), SuccPair()), ZeroPair
 def Sub(): term = Fun("m", Fun("n", App(App(Var("n"), Pred()), Var("m"))))
 def Equal(): term = Fun("m", Fun("n", App(App(And(), App(IsZero(), App(App(Sub(), Var("m")), Var("n")))), App(IsZero(), App(App(Sub(), Var("n")), Var("m"))))))
 
+def EmptyList(): term = Fun("c", Fun("n", Var("n")))
+def Cons(): term = Fun("e", Fun("l", Fun("c", Fun("n", App(App(Var("c"), Var("e")), App(App(Var("l"), Var("c")), Var("n")))))))
+def Head(): term = Fun("l", App(App(Var("l"), True()), EmptyList()))
+def AlwaysFalse(): term = Fun("c", Fun("n", False()))
+def IsNil(): term = Fun("l", App(App(Var("l"), AlwaysFalse()), True()))
+def ListPair(): term = Fun("l", App(App(App(App(Cons(), EmptyList()), Var("l")), Pair()), EmptyList()))
+//def Tail(): term = Fun("l", App(App(App(If(), App(IsNil(), App(Second(), Var("l")))), App(First(), Var("l"))), App(Tail(), App(Second(), Var("l")))))
+
 //find free variables
 
 def FV_helper(s:Set[String], t:term):Set[String] = t match {
@@ -228,84 +236,92 @@ def big_step(t:term):String = {
 
 //test cases
 
-big_step(Id())
-//Id
-big_step(App(Id(), Id()))
-//Id
+//big_step(Id())
+////Id
+//big_step(App(Id(), Id()))
+////Id
+//
+//big_step(App(App(True(), Id()), Id()))
+////Id
+//big_step(App(App(Fun("x", Fun("y", Var("x"))), True()), False()))
+////True
+//big_step(App(App(App(If(), True()), True()), False()))
+////True
+//
+//big_step(App(App(And(), True()), True()))
+////True
+//big_step(App(App(And(), True()), False()))
+////False
+//big_step(App(App(And(), False()), True()))
+////False
+//big_step(App(App(And(), False()), False()))
+////False
+//big_step(App(App(Or(), True()), True()))
+////True
+//big_step(App(App(Or(), True()), False()))
+////True
+//big_step(App(App(Or(), False()), True()))
+////True
+//big_step(App(App(Or(), False()), False()))
+////False
+//big_step(App(Not(), True()))
+////False
+//big_step(App(Not(), False()))
+////True
+//
+//big_step(App(First(), App(App(Pair(), True()), False())))
+////True
+//big_step(App(Second(), App(App(Pair(), True()), False())))
+////False
+//
+//big_step(Church(0))
+////Zero
+//big_step(App(Succ(),Church(0)))
+////One
+//big_step(App(Succ(), App(Succ(),Church(0))))
+////Two
+//big_step(App(Succ(), App(Succ(), App(Succ(),Church(0)))))
+////Three
+//big_step(App(App(Plus(), Church(0)), Church(0)))
+////Zero
+//big_step(App(App(Plus(), Church(0)), Church(1)))
+////One
+//big_step(App(App(Plus(), Church(3)), Church(4)))
+////Seven
+//big_step(App(App(Mult(), Church(1)), Church(2)))
+////Two
+//big_step(App(App(Mult(), Church(2)), Church(4)))
+////Eight
+//big_step(App(App(Power(), Church(2)), Church(2)))
+////Four
+//big_step(App(App(Power(), Church(3)), Church(2)))
+////Nine
+//
+//big_step(App(IsZero(), Church(0)))
+////True
+//big_step(App(IsZero(), Church(4)))
+////False
+//big_step(App(Pred(), Church(0)))
+////Zero
+//big_step(App(Pred(), Church(4)))
+////Four
+//big_step(App(App(Sub(), Church(7)), Church(2)))
+////Five
+//big_step(App(App(Sub(), Church(3)), Church(5)))
+////Zero
+//big_step(App(App(Equal(), Church(0)), Church(0)))
+////True
+//big_step(App(App(Equal(), Church(5)), Church(5)))
+////True
+//big_step(App(App(Equal(), Church(3)), Church(8)))
+////False
+//big_step(App(App(Equal(), Church(10)), Church(6)))
+////False
 
-big_step(App(App(True(), Id()), Id()))
-//Id
-big_step(App(App(Fun("x", Fun("y", Var("x"))), True()), False()))
-//True
-big_step(App(App(App(If(), True()), True()), False()))
-//True
-
-big_step(App(App(And(), True()), True()))
-//True
-big_step(App(App(And(), True()), False()))
-//False
-big_step(App(App(And(), False()), True()))
-//False
-big_step(App(App(And(), False()), False()))
-//False
-big_step(App(App(Or(), True()), True()))
-//True
-big_step(App(App(Or(), True()), False()))
-//True
-big_step(App(App(Or(), False()), True()))
-//True
-big_step(App(App(Or(), False()), False()))
-//False
-big_step(App(Not(), True()))
-//False
-big_step(App(Not(), False()))
-//True
-
-big_step(App(First(), App(App(Pair(), True()), False())))
-//True
-big_step(App(Second(), App(App(Pair(), True()), False())))
-//False
-
-big_step(Church(0))
-//Zero
-big_step(App(Succ(),Church(0)))
-//One
-big_step(App(Succ(), App(Succ(),Church(0))))
-//Two
-big_step(App(Succ(), App(Succ(), App(Succ(),Church(0)))))
+val list1 = App(App(Cons(), Church(3)), App(App(Cons(), Church(2)), EmptyList()))
+big_step(App(Head(), list1))
 //Three
-big_step(App(App(Plus(), Church(0)), Church(0)))
-//Zero
-big_step(App(App(Plus(), Church(0)), Church(1)))
-//One
-big_step(App(App(Plus(), Church(3)), Church(4)))
-//Seven
-big_step(App(App(Mult(), Church(1)), Church(2)))
-//Two
-big_step(App(App(Mult(), Church(2)), Church(4)))
-//Eight
-big_step(App(App(Power(), Church(2)), Church(2)))
-//Four
-big_step(App(App(Power(), Church(3)), Church(2)))
-//Nine
-
-big_step(App(IsZero(), Church(0)))
+big_step(App(IsNil(), EmptyList()))
 //True
-big_step(App(IsZero(), Church(4)))
-//False
-big_step(App(Pred(), Church(0)))
-//Zero
-big_step(App(Pred(), Church(4)))
-//Four
-big_step(App(App(Sub(), Church(7)), Church(2)))
-//Five
-big_step(App(App(Sub(), Church(3)), Church(5)))
-//Zero
-big_step(App(App(Equal(), Church(0)), Church(0)))
-//True
-big_step(App(App(Equal(), Church(5)), Church(5)))
-//True
-big_step(App(App(Equal(), Church(3)), Church(8)))
-//False
-big_step(App(App(Equal(), Church(10)), Church(6)))
+big_step(App(IsNil(), list1))
 //False
