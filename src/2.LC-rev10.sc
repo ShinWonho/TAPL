@@ -16,8 +16,6 @@ case class AppStep1(f: term, t: term) extends term
 
 case class AppStep2(f: term, t: term) extends term
 
-case object Wrong extends term
-
 //default
 def Id(): term = Fun("x", Var("x"))
 
@@ -44,9 +42,14 @@ def Church_helper(n:Int, t:term):term = n match {
 }
 def Church(n:Int):term = Fun("s", Fun("z", Church_helper(n, Var("z"))))
 def Succ(): term = Fun("n", Fun("s", Fun("z", App(Var("s"), App(App(Var("n"), Var("s")), Var("z"))))))
-def Plus() = Fun("m", Fun("n", Fun("s", Fun("z", App(App(Var("m"), Var("s")), App(App(Var("n"), Var("s")), Var("z")))))))
-def Mult() = Fun("m", Fun("n", App(App(Var("m"), App(Plus(), Var("n"))), Church(0))))
-def Power() = Fun("m", Fun("n", App(App(Var("n"), App(Mult(), Var("m"))), Church(1))))
+def Plus(): term = Fun("m", Fun("n", Fun("s", Fun("z", App(App(Var("m"), Var("s")), App(App(Var("n"), Var("s")), Var("z")))))))
+def Mult(): term = Fun("m", Fun("n", App(App(Var("m"), App(Plus(), Var("n"))), Church(0))))
+def Power(): term = Fun("m", Fun("n", App(App(Var("n"), App(Mult(), Var("m"))), Church(1))))
+def IsZero(): term = Fun("m", App(App(Var("m"),Fun("x", False())), True()))
+def ZeroPair(): term = App(App(Pair(), Church(0)), Church(0))
+def SuccPair(): term = Fun("p", App(App(Pair(), App(Second(), Var("p"))), App(Succ(), App(Second(), Var("p")))))
+def Pred(): term = Fun("m", App(First(), App(App(Var("m"), SuccPair()), ZeroPair())))
+def Sub(): term = Fun("m", Fun("n", App(App(Var("n"), Pred()), Var("m"))))
 
 //find free variables
 
@@ -88,19 +91,19 @@ def BV(t: term): Set[String] = BV_helper(Set[String](), t)
 
 //make replacing string
 
-def mk_to_helper(from: List[Char]):List[Char] = from match {
+def mk_to_helper(from: List[Char], carry: Int):List[Char] = from match {
   case a :: b =>
     if (a.isDigit) {
-      val num = a.toInt - 48
+      val num = a.toInt - 48 + carry
       if (num != 9) (num + 49).toChar :: b
-      else 48.toChar :: mk_to_helper(b)
+      else 48.toChar :: mk_to_helper(b, 1)
     }
-    else a :: mk_to_helper(b)
+    else a :: mk_to_helper(b, 0)
   case _ => '1' :: Nil
 }
 
 def mk_to(from: String): String = {
-  mk_to_helper(from.toList).mkString("")
+  mk_to_helper(from.toList, 0).mkString("")
 }
 
 @tailrec
@@ -122,7 +125,7 @@ def do_rename(t: term, from: String, to: String): term = t match {
   case App(f, t) => App(do_rename(f, from, to), do_rename(t, from, to))
   case AppStep1(f, t) => AppStep1(do_rename(f, from, to), do_rename(t, from, to))
   case AppStep2(f, t) => AppStep2(do_rename(f, from, to), do_rename(t, from, to))
-    case _ => t
+  case _ => t
 }
 
 //helper for rename
@@ -175,14 +178,12 @@ def small_step(t:term):term = t match {
     case Var(_) => AppStep1(f, t)
     case FunStep1(_, _) => AppStep1(f, t)
     case AppStep2(_, _) => AppStep1(f, t)
-    case Wrong => f
     case _ => App(f, small_step(t))
   }
   case AppStep1(f, t) => f match {
     case Var(_) => AppStep2(f, t)
     case FunStep1(x, ft) => substitute(rename(ft, t, x), Var(x), t)
     case AppStep2(_, _) => AppStep2(f, t)
-    case Wrong => f
     case _ => AppStep1(small_step(f), t)
   }
   case _ => t
@@ -202,16 +203,15 @@ def concrete(t:term):String = t match {
   }
   case AppStep1(f, t) => concrete(App(f, t))
   case AppStep2(f, t) => concrete(App(f, t))
-  case Wrong => "Wrong"
 }
 
 def big_step(t:term):String = {
   var prev = t
   var res = t
-//  var cnt = 0
+  //  var cnt = 0
   do {
-//    println(cnt + ": " + concrete(res))
-//    cnt = cnt + 1
+    //    println(cnt + ": " + concrete(res))
+    //    cnt = cnt + 1
     do {
       prev = res
       res = small_step(prev)
@@ -282,3 +282,14 @@ big_step(App(App(Power(), Church(2)), Church(2)))
 //Four
 big_step(App(App(Power(), Church(3)), Church(2)))
 //Nine
+big_step(App(IsZero(), Church(0)))
+//True
+big_step(App(IsZero(), Church(4)))
+//False
+
+big_step(App(Pred(), Church(0)))
+//Zero
+big_step(App(Pred(), Church(4)))
+//Four
+big_step(App(App(Sub(), Church(7)), Church(2)))
+//Five
