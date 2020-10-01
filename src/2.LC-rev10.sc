@@ -137,14 +137,13 @@ def do_rename(t: term, from: String, to: String): term = t match {
   case _ => t
 }
 
-//helper for rename
 @tailrec
 def rec_helper(bv: Set[String], fv: Set[String], l: List[String], t: term): term = l match {
   case a :: b => rec_helper(bv, fv, b, do_rename(t, a, find_to(bv, fv, a)))
   case _ => t
 }
 
-//find bv in t and change the bvs that makes bv not equals to fv and restrict
+//find bv in t and change the bv that makes bv not equals to fv
 
 def rename(t: term, restriction: term) : term = {
   val bv = BV(t)
@@ -194,9 +193,10 @@ def small_step(t:term):term = t match {
     case FunStep1(_, _) =>
       rename(f, t) match {
         case FunStep1(x, ft) => substitute(ft, Var(x), t)
-        case _ => Var("Wrong")
+//        case _ =>
+//          println("unreachable case")
+//          Var("Wrong")
       }
-//      substitute(rename(ft, t, x), Var(x), t)
     case AppStep2(_, _) => AppStep2(f, t)
     case _ => AppStep1(small_step(f), t)
   }
