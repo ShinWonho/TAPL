@@ -57,8 +57,12 @@ def Cons(): term = Fun("e", Fun("l", Fun("c", Fun("n", App(App(Var("c"), Var("e"
 def Head(): term = Fun("l", App(App(Var("l"), True()), EmptyList()))
 def AlwaysFalse(): term = Fun("c", Fun("n", False()))
 def IsNil(): term = Fun("l", App(App(Var("l"), AlwaysFalse()), True()))
-def ListPair(): term = Fun("l", App(App(App(App(Cons(), EmptyList()), Var("l")), Pair()), EmptyList()))
-//def Tail(): term = Fun("l", App(App(App(If(), App(IsNil(), App(Second(), Var("l")))), App(First(), Var("l"))), App(Tail(), App(Second(), Var("l")))))
+def EmptyPair(): term = App(App(Pair(), EmptyList()), EmptyList())
+def ConsPair(): term = Fun("e", Fun("p", App(App(Pair(), App(Second(), Var("p"))), App(App(Cons(), Var("e")), App(Second(), Var("p"))))))
+def PopFront(): term = Fun("l", App(First(), App(App(Var("l"), ConsPair()), EmptyPair())))
+def ConsTail(): term = Fun("e", Fun("l", App(App(App(If(), App(IsNil(), Var("l"))), App(App(Cons(), Var("e")), EmptyList())), Var("l"))))
+def Tail(): term = Fun("l", App(App(App(App(Var("l"), ConsTail()), EmptyList()), True()), EmptyList()))
+
 
 //find free variables
 
@@ -319,9 +323,20 @@ def big_step(t:term):String = {
 ////False
 
 val list1 = App(App(Cons(), Church(3)), App(App(Cons(), Church(2)), EmptyList()))
+big_step(list1)
 big_step(App(Head(), list1))
 //Three
 big_step(App(IsNil(), EmptyList()))
 //True
 big_step(App(IsNil(), list1))
 //False
+big_step(App(PopFront(), list1))
+//{^c.{^n.c Two n}}
+big_step(App(Tail(), list1))
+//{^c.{^n.c Two n}}
+val list2 = App(App(Cons(), EmptyList()), App(App(Cons(), Church(4)), list1))
+big_step(list2)
+big_step(App(PopFront(), list2))
+//{^c.{^n.c Four (c Three (c Two n))}}
+big_step(App(Tail(), list2))
+//{^c.{^n.c Two n}}
