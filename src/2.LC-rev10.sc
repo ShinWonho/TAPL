@@ -16,25 +16,32 @@ case class AppStep1(f: term, t: term) extends term
 
 case class AppStep2(f: term, t: term) extends term
 
+/* features */
+
 //default
+
 def Id(): term = Fun("x", Var("x"))
 
 //boolean
+
 def True(): term = Fun("t", Fun("f", Var("t")))
 def False(): term = Fun("t", Fun("f", Var("f")))
 def If(): term = Fun("c", Fun("t", Fun("f", App(App(Var("c"), Var("t")), Var("f")))))
 
 //boolean operation
+
 def And(): term = Fun("a", Fun("b", App(App(Var("a"), Var("b")), False())))
 def Or(): term = Fun("a", Fun("b", App(App(Var("a"), True()), Var("b"))))
 def Not(): term = Fun("a", App(App(App(If(), Var("a")), False()), True()))
 
 //pair
+
 def Pair(): term = Fun("a", Fun("b", Fun("s", App(App(Var("s"), Var("b")), Var("a")))))
 def First(): term = Fun("p", App(Var("p"), False()))
 def Second(): term = Fun("p", App(Var("p"), True()))
 
 //church numeral
+
 @tailrec
 def Church_helper(n:Int, t:term):term = n match {
   case 0 => t
@@ -52,6 +59,8 @@ def Pred(): term = Fun("m", App(First(), App(App(Var("m"), SuccPair()), ZeroPair
 def Sub(): term = Fun("m", Fun("n", App(App(Var("n"), Pred()), Var("m"))))
 def Equal(): term = Fun("m", Fun("n", App(App(And(), App(IsZero(), App(App(Sub(), Var("m")), Var("n")))), App(IsZero(), App(App(Sub(), Var("n")), Var("m"))))))
 
+//list
+
 def EmptyList(): term = Fun("c", Fun("n", Var("n")))
 def Cons(): term = Fun("e", Fun("l", Fun("c", Fun("n", App(App(Var("c"), Var("e")), App(App(Var("l"), Var("c")), Var("n")))))))
 def Head(): term = Fun("l", App(App(Var("l"), True()), EmptyList()))
@@ -63,6 +72,7 @@ def PopFront(): term = Fun("l", App(First(), App(App(Var("l"), ConsPair()), Empt
 def ConsTail(): term = Fun("e", Fun("l", App(App(App(If(), App(IsNil(), Var("l"))), App(App(Cons(), Var("e")), EmptyList())), Var("l"))))
 def Tail(): term = Fun("l", App(App(App(App(Var("l"), ConsTail()), EmptyList()), True()), EmptyList()))
 
+/* evaluation helper functions */
 
 //find free variables
 
@@ -197,9 +207,6 @@ def small_step(t:term):term = t match {
     case FunStep1(_, _) =>
       rename(f, t) match {
         case FunStep1(x, ft) => substitute(ft, Var(x), t)
-//        case _ =>
-//          println("unreachable case")
-//          Var("Wrong")
       }
     case AppStep2(_, _) => AppStep2(f, t)
     case _ => AppStep1(small_step(f), t)
