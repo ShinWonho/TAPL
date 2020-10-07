@@ -1,4 +1,4 @@
-//full beta-reduction + shadowing_change_if_needed + concrete
+//add num & bool
 
 import scala.annotation.tailrec
 
@@ -19,6 +19,8 @@ case class AppStep2(f: term, t: term) extends term
 case object True extends term
 
 case object False extends term
+
+case class Num(n: Int) extends term
 
 case class Op(op: String, l: List[term]) extends term
 
@@ -90,7 +92,12 @@ def If(c: term, t: term, e: term): term  = c match {
     Op("if", l)
 }
 
-def Eq(m: term, n: term): term
+def Eq(m: term, n: term): term = (m, n) match {
+  case (Num(m), Num(n)) => if (m == n) True else False
+  case _ =>
+  val l = List(m, n)
+    Op("eq", l)
+}
 
 //conversion between term and real value
 
@@ -271,53 +278,50 @@ def substitute(t1: term, from: term, to: term): term = {
   }
 }
 
-def small_step(t:term):term = {
-  def try_op(op:Op): term = {
-    val param = op.l
-    op.op match {
-      case "if" => param.head match {
-        case True => param.tail.head
-        case False => param.tail.tail.head
-        case _ => op
-      }
-    }
+def try_op(op:Op): term = {//revise it!
+  val param = op.l
+  op.op match {
+    case "if" => If(param.head, param.tail.head, param.tail.tail.head)
+    case "eq" => Eq(param.head, param.tail.head)
   }
+}
 
-  t match {//add bool and op
-    case Fun(x, t) =>
-      val tmp = small_step(t)
-      if (tmp == t) FunStep1(x, t)
-      else Fun(x, tmp)
-    case App(f, t) => t match {
-      case Var(_) => AppStep1(f, t)
-      case True => AppStep1(f, t)
-      case False => AppStep1(f, t)
-      case op:Op =>
-        val tmp = small_step(op)
-        if (op == tmp) AppStep1(f, t)
-        else App(f, tmp)
-      case FunStep1(_, _) => AppStep1(f, t)
-      case AppStep2(_, _) => AppStep1(f, t)
-      case _ => App(f, small_step(t))
-    }
-    case AppStep1(f, t) => f match {
-      case Var(_) => AppStep2(f, t)
-      case True => Wrong
-      case False => Wrong
-      case op:Op =>
-        val tmp = small_step(op)
-        if (op == tmp) AppStep2(f, t)
-        else AppStep1(tmp, t)
-      case FunStep1(_, _) =>
-        rename(f, t) match {
-          case FunStep1(x, ft) => substitute(ft, Var(x), t)
-        }
-      case AppStep2(_, _) => AppStep2(f, t)
-      case _ => AppStep1(small_step(f), t)
-    }
-    case op:Op => try_op(op)
-    case _ => t
+def small_step(t:term):term = t match {
+  case Fun(x, t) =>
+    val tmp = small_step(t)
+    if (tmp == t) FunStep1(x, t)
+    else Fun(x, tmp)
+  case App(f, t) => t match {
+    case Var(_) => AppStep1(f, t)
+    case True => AppStep1(f, t)
+    case False => AppStep1(f, t)
+    case Num(_) => AppStep1(f, t)
+    case op: Op =>
+      val tmp = small_step(op)
+      if (op == tmp) AppStep1(f, t)
+      else App(f, tmp)
+    case FunStep1(_, _) => AppStep1(f, t)
+    case AppStep2(_, _) => AppStep1(f, t)
+    case _ => App(f, small_step(t))
   }
+  case AppStep1(f, t) => f match {
+    case Var(_) => AppStep2(f, t)
+    case True => Wrong
+    case False => Wrong
+    case Num(_) => Wrong
+    case op: Op =>
+      val tmp = small_step(op)
+      if (op == tmp) AppStep2(f, t)
+      else AppStep1(tmp, t)
+    case FunStep1(_, _) =>
+      rename(f, t) match {
+        case FunStep1(x, ft) => substitute(ft, Var(x), t)
+      }
+    case AppStep2(_, _) => AppStep2(f, t)
+    case _ => AppStep1(small_step(f), t)
+  }
+  case op: Op => try_op(op)
+  case _ => t
 }
 
 //convert abstract to concrete
@@ -347,6 +351,7 @@ def concrete(t:term):String = {
     case AppStep2(f, t) => concrete(App(f, t))
     case True => "true"
     case False => "false"
+    case Num(n) => "" + n
     case Op(op, l) => " ( " + op + ":" + list_concrete(l) + " ) "
   }
 }
@@ -477,3 +482,11 @@ big_step(App(Fun("x", If(Var("x"), False, LCFalse())), True))
 //False
 big_step(App(Fun("x", If(Var("x"), False, LCFalse())), False))
 //false
+big_step(Eq(Num(1), Num(3)))
+//false
+big_step(Eq(Num(3), Num(3)))
+//true
+big_step(App(Fun("x", Eq(Var("x"), Num(3))), Num(1)))
+//false
+big_step(App(Fun("x", Eq(Var("x"), Num(5))), Num(5)))
+//true
