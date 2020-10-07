@@ -1,9 +1,12 @@
-def f1(n:Int): Unit = {
-  def f2(n:Int) = {
-    f1(n)
-  }
-  println(n)
-  if (n == 1) f2(n - 1)
-}
+trait hi
 
-f1(1)
+case object hello extends hi
+
+case object hihi extends hi
+
+val a = hihi
+
+a match {
+  case hihi or hello => println("hi")
+  case _ => println("hello")
+}

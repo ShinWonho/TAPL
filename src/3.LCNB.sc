@@ -16,11 +16,13 @@ case class AppStep1(f: term, t: term) extends term
 
 case class AppStep2(f: term, t: term) extends term
 
-case object LCTrue extends term
+case object True extends term
 
-case object LCFalse extends term
+case object False extends term
 
 case class Op(op: String, l: List[term]) extends term
+
+case object Wrong extends term
 
 /* features */
 
@@ -30,21 +32,21 @@ def Id(): term = Fun("x", Var("x"))
 
 //boolean
 
-def True(): term = Fun("t", Fun("f", Var("t")))
-def False(): term = Fun("t", Fun("f", Var("f")))
-def If(): term = Fun("c", Fun("t", Fun("f", App(App(Var("c"), Var("t")), Var("f")))))
+def LCTrue(): term = Fun("t", Fun("f", Var("t")))
+def LCFalse(): term = Fun("t", Fun("f", Var("f")))
+def LCIf(): term = Fun("c", Fun("t", Fun("f", App(App(Var("c"), Var("t")), Var("f")))))
 
 //boolean operation
 
-def And(): term = Fun("a", Fun("b", App(App(Var("a"), Var("b")), False())))
-def Or(): term = Fun("a", Fun("b", App(App(Var("a"), True()), Var("b"))))
-def Not(): term = Fun("a", App(App(App(If(), Var("a")), False()), True()))
+def And(): term = Fun("a", Fun("b", App(App(Var("a"), Var("b")), LCFalse())))
+def Or(): term = Fun("a", Fun("b", App(App(Var("a"), LCTrue()), Var("b"))))
+def Not(): term = Fun("a", App(App(App(LCIf(), Var("a")), LCFalse()), LCTrue()))
 
 //pair
 
 def Pair(): term = Fun("a", Fun("b", Fun("s", App(App(Var("s"), Var("b")), Var("a")))))
-def First(): term = Fun("p", App(Var("p"), False()))
-def Second(): term = Fun("p", App(Var("p"), True()))
+def First(): term = Fun("p", App(Var("p"), LCFalse()))
+def Second(): term = Fun("p", App(Var("p"), LCTrue()))
 
 //church numeral
 
@@ -58,7 +60,7 @@ def Succ(): term = Fun("n", Fun("s", Fun("z", App(Var("s"), App(App(Var("n"), Va
 def Plus(): term = Fun("m", Fun("n", Fun("s", Fun("z", App(App(Var("m"), Var("s")), App(App(Var("n"), Var("s")), Var("z")))))))
 def Mult(): term = Fun("m", Fun("n", App(App(Var("m"), App(Plus(), Var("n"))), Church(0))))
 def Power(): term = Fun("m", Fun("n", App(App(Var("n"), App(Mult(), Var("m"))), Church(1))))
-def IsZero(): term = Fun("m", App(App(Var("m"),Fun("x", False())), True()))
+def IsZero(): term = Fun("m", App(App(Var("m"),Fun("x", LCFalse())), LCTrue()))
 def ZeroPair(): term = App(App(Pair(), Church(0)), Church(0))
 def SuccPair(): term = Fun("p", App(App(Pair(), App(Second(), Var("p"))), App(Succ(), App(Second(), Var("p")))))
 def Pred(): term = Fun("m", App(First(), App(App(Var("m"), SuccPair()), ZeroPair())))
@@ -69,23 +71,35 @@ def Equal(): term = Fun("m", Fun("n", App(App(And(), App(IsZero(), App(App(Sub()
 
 def EmptyList(): term = Fun("c", Fun("n", Var("n")))
 def Cons(): term = Fun("e", Fun("l", Fun("c", Fun("n", App(App(Var("c"), Var("e")), App(App(Var("l"), Var("c")), Var("n")))))))
-def Head(): term = Fun("l", App(App(Var("l"), True()), EmptyList()))
-def AlwaysFalse(): term = Fun("c", Fun("n", False()))
-def IsNil(): term = Fun("l", App(App(Var("l"), AlwaysFalse()), True()))
+def Head(): term = Fun("l", App(App(Var("l"), LCTrue()), EmptyList()))
+def AlwaysLCFalse(): term = Fun("c", Fun("n", LCFalse()))
+def IsNil(): term = Fun("l", App(App(Var("l"), AlwaysLCFalse()), LCTrue()))
 def EmptyPair(): term = App(App(Pair(), EmptyList()), EmptyList())
 def ConsPair(): term = Fun("e", Fun("p", App(App(Pair(), App(Second(), Var("p"))), App(App(Cons(), Var("e")), App(Second(), Var("p"))))))
 def PopFront(): term = Fun("l", App(First(), App(App(Var("l"), ConsPair()), EmptyPair())))
-def ConsTail(): term = Fun("e", Fun("l", App(App(App(If(), App(IsNil(), Var("l"))), App(App(Cons(), Var("e")), EmptyList())), Var("l"))))
-def Tail(): term = Fun("l", App(App(App(App(Var("l"), ConsTail()), EmptyList()), True()), EmptyList()))
+def ConsTail(): term = Fun("e", Fun("l", App(App(App(LCIf(), App(IsNil(), Var("l"))), App(App(Cons(), Var("e")), EmptyList())), Var("l"))))
+def Tail(): term = Fun("l", App(App(App(App(Var("l"), ConsTail()), EmptyList()), LCTrue()), EmptyList()))
 
-//conversion between term and real value
+//real value operations
 
-def LCIf(c: term, t: term, e: term): term = c match {
-  case LCTrue => t
-  case LCFalse => e
+def If(c: term, t: term, e: term): term  = c match {
+  case True => t
+  case False => e
   case _ =>
     val l = List(c, t, e)
     Op("if", l)
+}
+
+def Eq(m: term, n: term): term
+
+//conversion between term and real value
+
+def ch2bo(t: term): term = App(App(t, True), False)
+
+def bo2ch(b: term): term = b match {
+  case True => LCTrue()
+  case False => LCFalse()
+  case _ => Wrong
 }
 
 //recursion
@@ -97,93 +111,130 @@ def Fix(): term = Fun("f", App(Fun("x", App(Var("f"), Fun("y", App(App(Var("x"),
 
 //find free variables
 
-def FV_helper(s:Set[String], t:term):Set[String] = t match {
-  case Var(x) => s + x
-  case Fun(_, t1) => FV_helper(s, t1)
-  case FunStep1(_, t1) => FV_helper(s, t1)
-  case App(f, t) =>
-    val s1 = FV_helper(s, f)
-    FV_helper(s1, t)
-  case AppStep1(f, t) =>
-    val s1 = FV_helper(s, f)
-    FV_helper(s1, t)
-  case AppStep2(f, t) =>
-    val s1 = FV_helper(s, f)
-    FV_helper(s1, t)
-}
+def FV(t: term): Set[String] = {
+  def FV_helper(s:Set[String], t:term):Set[String] = {
+    @tailrec
+    def list_FV(s: Set[String], l: List[term]): Set[String] = l match {
+      case h :: t => list_FV(FV_helper(s, h), t)
+      case _ => s
+    }
 
-def FV(t: term): Set[String] = FV_helper(Set[String](), t)
+    t match {
+      case Var(x) => s + x
+      case Fun(_, t1) => FV_helper(s, t1)
+      case FunStep1(_, t1) => FV_helper(s, t1)
+      case App(f, t) =>
+        val s1 = FV_helper(s, f)
+        FV_helper(s1, t)
+      case AppStep1(f, t) =>
+        val s1 = FV_helper(s, f)
+        FV_helper(s1, t)
+      case AppStep2(f, t) =>
+        val s1 = FV_helper(s, f)
+        FV_helper(s1, t)
+      case op:Op => list_FV(s, op.l)
+      case _ => s
+    }
+  }
+
+  FV_helper(Set[String](), t)
+}
 
 //find binding variable
 
-def BV_helper(s: Set[String], t: term): Set[String] = t match {
-  case Var(_) => s
-  case Fun(x, t) => BV_helper(s + x, t)
-  case FunStep1(x, t) => BV_helper(s + x, t)
-  case App(f, t) =>
-    val s1 = BV_helper(s, f)
-    BV_helper(s1, t)
-  case AppStep1(f, t) =>
-    val s1 = BV_helper(s, f)
-    BV_helper(s1, t)
-  case AppStep2(f, t) =>
-    val s1 = BV_helper(s, f)
-    BV_helper(s1, t)
-}
+def BV(t: term): Set[String] = {
+  def BV_helper(s: Set[String], t: term): Set[String] = {
+    @tailrec
+    def list_BV(s: Set[String], l: List[term]): Set[String] = l match {
+      case h :: t => list_BV(BV_helper(s, h), t)
+      case _ => s
+    }
 
-def BV(t: term): Set[String] = BV_helper(Set[String](), t)
+    t match {
+      case Fun(x, t) => BV_helper(s + x, t)
+      case FunStep1(x, t) => BV_helper(s + x, t)
+      case App(f, t) =>
+        val s1 = BV_helper(s, f)
+        BV_helper(s1, t)
+      case AppStep1(f, t) =>
+        val s1 = BV_helper(s, f)
+        BV_helper(s1, t)
+      case AppStep2(f, t) =>
+        val s1 = BV_helper(s, f)
+        BV_helper(s1, t)
+      case op:Op => list_BV(s, op.l)
+      case _ => s
+    }
+  }
+
+  BV_helper(Set[String](), t)
+}
 
 //make replacing string
 
-def mk_to_helper(from: List[Char], carry: Int):List[Char] = from match {
-  case a :: b =>
-    if (a.isDigit) {
-      val num = a.toInt - 48 + carry
-      if (num != 9) (num + 49).toChar :: b
-      else 48.toChar :: mk_to_helper(b, 1)
-    }
-    else a :: mk_to_helper(b, 0)
-  case _ => '1' :: Nil
-}
-
-def mk_to(from: String): String = {
-  mk_to_helper(from.toList, 0).mkString("")
-}
-
 @tailrec
 def find_to(bv: Set[String], fv: Set[String], from: String): String = {
+  def mk_to(from: String): String = {
+    def mk_to_helper(from: List[Char], carry: Int):List[Char] = from match {
+      case a :: b =>
+        if (a.isDigit) {
+          val num = a.toInt - 48 + carry
+          if (num != 9) (num + 49).toChar :: b
+          else 48.toChar :: mk_to_helper(b, 1)
+        }
+        else a :: mk_to_helper(b, 0)
+      case _ => '1' :: Nil
+    }
+
+    mk_to_helper(from.toList, 0).mkString("")
+  }
+
   if ((bv++fv).contains(from)) find_to(bv, fv, mk_to(from))
   else from
 }
 
 //rename from "from" to "to"
 
-def do_rename(t: term, from: String, to: String): term = t match {
-  case Var(x) if x == from => Var(to)
-  case Fun(x, t1) =>
-    if (x == from) Fun(to, do_rename(t1, from, to))
-    else Fun(x, do_rename(t1, from, to))
-  case FunStep1(x, t1) =>
-    if (x == from) FunStep1(to, do_rename(t1, from, to))
-    else FunStep1(x, do_rename(t1, from, to))
-  case App(f, t) => App(do_rename(f, from, to), do_rename(t, from, to))
-  case AppStep1(f, t) => AppStep1(do_rename(f, from, to), do_rename(t, from, to))
-  case AppStep2(f, t) => AppStep2(do_rename(f, from, to), do_rename(t, from, to))
-  case _ => t
-}
+def do_rename(t: term, from: String, to: String): term = {
+  def list_rename(l: List[term], from: String, to: String): List[term] = {
+    @tailrec
+    def list_rename_helper(l: List[term], res: List[term], from: String, to: String): List[term] = l match {
+      case h :: t =>
+        list_rename_helper(t, res :+ do_rename(h, from, to), from, to)
+      case _ => res
+    }
 
-@tailrec
-def rec_helper(bv: Set[String], fv: Set[String], l: List[String], t: term): term = l match {
-  case a :: b => rec_helper(bv, fv, b, do_rename(t, a, find_to(bv, fv, a)))
-  case _ => t
+    list_rename_helper(l, Nil, from, to)
+  }
+
+  t match {
+    case Var(x) if x == from => Var(to)
+    case Fun(x, t1) =>
+      if (x == from) Fun(to, do_rename(t1, from, to))
+      else Fun(x, do_rename(t1, from, to))
+    case FunStep1(x, t1) =>
+      if (x == from) FunStep1(to, do_rename(t1, from, to))
+      else FunStep1(x, do_rename(t1, from, to))
+    case App(f, t) => App(do_rename(f, from, to), do_rename(t, from, to))
+    case AppStep1(f, t) => AppStep1(do_rename(f, from, to), do_rename(t, from, to))
+    case AppStep2(f, t) => AppStep2(do_rename(f, from, to), do_rename(t, from, to))
+    case op:Op => Op(op.op, list_rename(op.l, from, to))
+    case _ => t
+  }
 }
 
 //find bv in t and change the bv that makes bv not equals to fv
 
 def rename(t: term, restriction: term) : term = {
+  @tailrec
+  def rename_helper(bv: Set[String], fv: Set[String], l: List[String], t: term): term = l match {
+    case a :: b => rename_helper(bv, fv, b, do_rename(t, a, find_to(bv, fv, a)))
+    case _ => t
+  }
+
   val bv = BV(t)
   val fv = FV(restriction)
-  rec_helper(bv, fv, bv.intersect(fv).toList, t)
+  rename_helper(bv, fv, bv.intersect(fv).toList, t)
 }
 
 //substitute the terms in t1 from "from" to "to"
@@ -220,53 +271,67 @@ def substitute(t1: term, from: term, to: term): term = {
   }
 }
 
-//try op and if success, return value else keep
-
-def try_op(op:Op): term = {
-  val param = op.l
-  op.op match {
-    case "if" => param.head match {
-      case LCTrue => param.tail.head
-      case LCFalse => param.tail.tail.head
-      case _ => op
+def small_step(t:term):term = {
+  def try_op(op:Op): term = {
+    val param = op.l
+    op.op match {
+      case "if" => param.head match {
+        case True => param.tail.head
+        case False => param.tail.tail.head
+        case _ => op
+      }
     }
   }
-}
 
-def small_step(t:term):term = t match {//add bool and op
-  case Fun(x, t) =>
-    val tmp = small_step(t)
-    if (tmp == t) FunStep1(x, t)
-    else Fun(x, tmp)
-  case App(f, t) => t match {
-    case Var(_) => AppStep1(f, t)
-    case FunStep1(_, _) => AppStep1(f, t)
-    case AppStep2(_, _) => AppStep1(f, t)
-    case _ => App(f, small_step(t))
+  t match {//add bool and op
+    case Fun(x, t) =>
+      val tmp = small_step(t)
+      if (tmp == t) FunStep1(x, t)
+      else Fun(x, tmp)
+    case App(f, t) => t match {
+      case Var(_) => AppStep1(f, t)
+      case True => AppStep1(f, t)
+      case False => AppStep1(f, t)
+      case op:Op =>
+        val tmp = small_step(op)
+        if (op == tmp) AppStep1(f, t)
+        else App(f, tmp)
+      case FunStep1(_, _) => AppStep1(f, t)
+      case AppStep2(_, _) => AppStep1(f, t)
+      case _ => App(f, small_step(t))
+    }
+    case AppStep1(f, t) => f match {
+      case Var(_) => AppStep2(f, t)
+      case True => Wrong
+      case False => Wrong
+      case op:Op =>
+        val tmp = small_step(op)
+        if (op == tmp) AppStep2(f, t)
+        else AppStep1(tmp, t)
+      case FunStep1(_, _) =>
+        rename(f, t) match {
+          case FunStep1(x, ft) => substitute(ft, Var(x), t)
+        }
+      case AppStep2(_, _) => AppStep2(f, t)
+      case _ => AppStep1(small_step(f), t)
+    }
+    case op:Op => try_op(op)
+    case _ => t
   }
-  case AppStep1(f, t) => f match {
-    case Var(_) => AppStep2(f, t)
-    case FunStep1(_, _) =>
-      rename(f, t) match {
-        case FunStep1(x, ft) => substitute(ft, Var(x), t)
-      }
-    case AppStep2(_, _) => AppStep2(f, t)
-    case _ => AppStep1(small_step(f), t)
-  }
-  case op:Op => try_op(op)
-  case _ => t
 }
 
 //convert abstract to concrete
 
 def concrete(t:term):String = {
-  @tailrec
-  def list2string_helper(l: List[term], res: String): String = l match {
-    case h :: t => list2string_helper(t, res + " " + concrete(h))
-    case _ => res
-  }
+  def list_concrete(l: List[term]): String = {
+    @tailrec
+    def list_concrete_helper(l: List[term], res: String): String = l match {
+      case h :: t => list_concrete_helper(t, res + " " + concrete(h))
+      case _ => res
+    }
 
-  def list2string(l: List[term]): String = list2string_helper(l, "")
+    list_concrete_helper(l, "")
+  }
 
   t match {
     case Var(x) => x
@@ -280,9 +345,9 @@ def concrete(t:term):String = {
     }
     case AppStep1(f, t) => concrete(App(f, t))
     case AppStep2(f, t) => concrete(App(f, t))
-    case LCTrue => "true"
-    case LCFalse => "false"
-    case Op(op, l) => " ( " + op + ":" + list2string(l) + " ) "
+    case True => "true"
+    case False => "false"
+    case Op(op, l) => " ( " + op + ":" + list_concrete(l) + " ) "
   }
 }
 
@@ -308,37 +373,37 @@ def big_step(t:term):String = {
 //big_step(App(Id(), Id()))
 ////Id
 //
-//big_step(App(App(True(), Id()), Id()))
+//big_step(App(App(LCTrue(), Id()), Id()))
 ////Id
-//big_step(App(App(Fun("x", Fun("y", Var("x"))), True()), False()))
+//big_step(App(App(Fun("x", Fun("y", Var("x"))), LCTrue()), LCFalse()))
 ////True
-//big_step(App(App(App(If(), True()), True()), False()))
-////True
-//
-//big_step(App(App(And(), True()), True()))
-////True
-//big_step(App(App(And(), True()), False()))
-////False
-//big_step(App(App(And(), False()), True()))
-////False
-//big_step(App(App(And(), False()), False()))
-////False
-//big_step(App(App(Or(), True()), True()))
-////True
-//big_step(App(App(Or(), True()), False()))
-////True
-//big_step(App(App(Or(), False()), True()))
-////True
-//big_step(App(App(Or(), False()), False()))
-////False
-//big_step(App(Not(), True()))
-////False
-//big_step(App(Not(), False()))
+//big_step(App(App(App(LCIf(), LCTrue()), LCTrue()), LCFalse()))
 ////True
 //
-//big_step(App(First(), App(App(Pair(), True()), False())))
+//big_step(App(App(And(), LCTrue()), LCTrue()))
 ////True
-//big_step(App(Second(), App(App(Pair(), True()), False())))
+//big_step(App(App(And(), LCTrue()), LCFalse()))
+////False
+//big_step(App(App(And(), LCFalse()), LCTrue()))
+////False
+//big_step(App(App(And(), LCFalse()), LCFalse()))
+////False
+//big_step(App(App(Or(), LCTrue()), LCTrue()))
+////True
+//big_step(App(App(Or(), LCTrue()), LCFalse()))
+////True
+//big_step(App(App(Or(), LCFalse()), LCTrue()))
+////True
+//big_step(App(App(Or(), LCFalse()), LCFalse()))
+////False
+//big_step(App(Not(), LCTrue()))
+////False
+//big_step(App(Not(), LCFalse()))
+////True
+//
+//big_step(App(First(), App(App(Pair(), LCTrue()), LCFalse())))
+////True
+//big_step(App(Second(), App(App(Pair(), LCTrue()), LCFalse())))
 ////False
 //
 //big_step(Church(0))
@@ -404,8 +469,11 @@ def big_step(t:term):String = {
 //big_step(App(Tail(), list2))
 ////{^c.{^n.c Two n}}
 
-big_step(LCIf(LCTrue, LCFalse, False()))
-//LCFalse
-big_step(LCIf(LCFalse, LCFalse, False()))
+big_step(If(True, False, LCFalse()))
+//False
+big_step(If(False, False, LCFalse()))
 //false
-big_step(App(Fun("x", LCIf(Var("x"), LCFalse, False())), LCFalse))
+big_step(App(Fun("x", If(Var("x"), False, LCFalse())), True))
+//False
+big_step(App(Fun("x", If(Var("x"), False, LCFalse())), False))
+//false
