@@ -9,11 +9,11 @@ class myLC {
   trait term
 
   class Var(s: String) extends term {
-    val name = s
+    val x = s
   }
 
-  class Fun(binding: Var, term: term) extends term {
-    val x = binding
+  class Fun(name: String, term: term) extends term {
+    val x = name
     var t = term
   }
 
@@ -32,10 +32,10 @@ class myLC {
 
   object Wrong extends state//not used now, but later in num & bool
 
-  def substitute(t:term, from: Var, to:term): term = {
+  def substitute(t:term, from: String, to:term): term = {
     t match {
-      case t:Var if t == from => to
-      case t:Fun =>
+      case t:Var if t.x == from => to
+      case t:Fun if t.x != from =>
         t.t = substitute(t.t, from, to)
         t
       case t:App =>
@@ -73,30 +73,37 @@ class myLC {
   }
 
   def concrete(t: term): String = t match {
-    case t:Var => t.name + " "
-    case t:Fun => "{ ^" + t.x.name + "." + concrete(t.t)+"} "
+    case t:Var => t.x + " "
+    case t:Fun => "{ ^" + t.x + "." + concrete(t.t)+"} "
     case t:App => "( " + concrete(t.f) + concrete(t.p) + ") "
   }
 
   @tailrec
-  private def run(t: term): Unit = {
-    println(concrete(t))
+  private def full_reduction(t: term): Unit = {
+    println("\t" + concrete(t))
     reduce(t) match {
       case Wrong => println("Wrong!")
       case Normal =>
-      case t:Term => run(t.t)
+      case t:Term => full_reduction(t.t)
     }
   }
 
+  var count = 0
+
+  def run(t: term): Unit = {
+    println("\ntest" + count + ":")
+    full_reduction(t)
+  }
+
+  def Var(s: String): Var = new Var(s)
+
+  def Fun(s: String, term: term): term = new Fun(s, term)
+
+  def App(f: term, p: term): term = new App(f, p)
+
   //test
 
-  val x = new Var("x")
-  val y = new Var("y")
-
-  val id1 = new Fun(x, x)
-  val id2 = new Fun(y, y)
-
-  val t = new App(id1, id2)
+  val t = App(Fun("x", {val x = Var("x"); x}), Fun("y", {val y = Var("y"); y}))
 
   run(t)
 
