@@ -1,12 +1,7 @@
-trait hi
+var a = "hi"
 
-case object hello extends hi
+var b = a
 
-case object hihi extends hi
+a = "hello"
 
-val a = hihi
-
-a match {
-  case hihi or hello => println("hi")
-  case _ => println("hello")
-}
+b
