@@ -2,23 +2,29 @@ import scala.annotation.tailrec
 
 object myLC {
 
-  trait term
+  trait term {
+    var s: state
+  }
 
-  class Var(s: String) extends term {
-    var x = s
+  class Var(name: String) extends term {
+    var s: state = Normal
+    var x = name
   }
 
   class Fun(name: String, term: term) extends term {
+    var s: state = Reducible
     var x = name
     var t = term
   }
 
   class App(func: term, param: term) extends term {
+    var s: state = Reducible
     var f = func
     var p = param
   }
 
   class param(term: term) extends term {
+    var s: state = Reducible
     var in = term
   }
 
@@ -40,10 +46,10 @@ object myLC {
       case t: param => alpha_conversion_helper(t.in)
       case _ =>
     }
-//    println("\talpha conversion: " + concrete(t) + "[" + from + "->" + to + "]")
+    //    println("\talpha conversion: " + concrete(t) + "[" + from + "->" + to + "]")
     alpha_conversion_helper(t.t)
     t.x = to
-//    println("\t                ->" + concrete(t))
+    //    println("\t                ->" + concrete(t))
     alpha += 1
     t
   }
@@ -78,21 +84,25 @@ object myLC {
   }
 
   def doApp(f: Fun, p: term): term = {
-//    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
+    //    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
     if (contains(p, f.x)) alpha_conversion(f)
-//    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
-    substitute(f.t, f.x, new param(p))
+    //    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
+    fresh(substitute(f.t, f.x, new param(p)))
   }
 
-  def reduceApp(a: App): (term, state) = {
-    val tpl = reduce(a.f)
-    a.f = tpl._1
-    tpl._2 match {
-      case Reducible => (a, Reducible)
-      case Normal =>
-        val tpl = reduce(a.p)
-        a.p = tpl._1
-        (a, tpl._2)
+  def reduceApp(a: App): term = a.s match {
+    case Normal => a
+    case Reducible => a.f.s match {
+      case Reducible =>
+        a.f = reduce(a.f)
+        a
+      case Normal => a.p.s match {
+        case Normal => a
+        case Reducible =>
+          a.p = reduce(a.p)
+          a.s = a.p.s
+          a
+      }
     }
   }
 
@@ -102,9 +112,18 @@ object myLC {
 
   def deepcopy(t: term): term = t match {
     case t: Var => new Var(t.x)
-    case t: Fun => new Fun(t.x, deepcopy(t.t))
-    case t: App => new App(deepcopy(t.f), deepcopy(t.p))
-    case t: param => new param(deepcopy(t.in))
+    case t: Fun =>
+      val res = new Fun(t.x, deepcopy(t.t))
+      res.s = t.s
+      res
+    case t: App =>
+      val res = new App(deepcopy(t.f), deepcopy(t.p))
+      res.s = t.s
+      res
+    case t: param =>
+      val res = new param(deepcopy(t.in))
+      res.s = t.s
+      res
   }
 
   @tailrec
@@ -113,37 +132,63 @@ object myLC {
     case t => t
   }
 
-  def reduce(t: term): (term, state) = {
-    var res: (term, state) = (t, Normal)
-    //    println("\t\treduce begin (" + concrete(t) + ")")
+  def fresh(t: term): term = {
     t match {
-      case t: Var => res = (t, Normal)
+      case _: Var => t
       case t: Fun =>
-        val tpl = reduce(t.t)
-        t.t = tpl._1
-        res = (t, tpl._2)
+        t.s = Reducible
+        fresh(t.t)
+      case t: App =>
+        t.s = Reducible
+        fresh(t.f)
+        fresh(t.p)
+      case t: param =>
+        t.s = Reducible
+        fresh(t.in)
+    }
+    t
+  }
+
+  def fresh(t: Fun): Fun = fresh(t: term) match {
+    case t: Fun => t
+  }
+
+  def reduce(t: term): term = {
+    var res: term = t
+//        println("\t\treduce begin (" + concrete(t) + ")")
+    t match {
+      case _: Var =>
+      case t: Fun => t.s match {
+        case Normal =>
+        case Reducible =>
+          t.t = reduce(t.t)
+          t.s = t.t.s
+      }
       case t: App => t.f match {
-        case f: Fun => res = (doApp(f, t.p), Reducible)
+        case f: Fun => res = doApp(fresh(f), t.p)
         case p: param => peel(p) match {
-          case f: Fun => res = (doApp(deepcopy(f), t.p), Reducible)
+          case f: Fun => res = doApp(deepcopy(f), t.p)
           case _ => res = reduceApp(t)
         }
         case _ => res = reduceApp(t)
       }
-      case t: param =>
-        t.in = peel(t)
-        val tpl = reduce(t.in)
-        t.in = tpl._1
-        tpl._2 match {
-          case Normal =>
-            tpl._1 match {
-              case _: Fun => res = (deepcopy (tpl._1), Normal)
-              case _ => res = (t, Normal)
-            }
-          case Reducible => res = (t, Reducible)
-        }
+      case t: param => t.s match {
+        case Normal => t.in = peel(t)
+        case Reducible =>
+          t.in = peel(t)
+          t.in = reduce(t.in)
+          t.s = t.in.s
+          t.s match {
+            case Normal =>
+              t.in match {
+                case _: Fun => res = deepcopy (t.in)
+                case _ =>
+              }
+            case Reducible =>
+          }
+      }
     }
-    //    println("\t\treduce end (" + concrete(t) + ")")
+//        println("\t\treduce end (" + concrete(t) + ")")
     res
   }
 
@@ -153,19 +198,19 @@ object myLC {
     var reduce_step = 0
     @tailrec
     def run_helper(t: term): Unit = {
-//      if (reduce_step > 300) return
-      println(reduce_step + ":\t" + concrete(t))
+      //      if (reduce_step > 300) return
+            println(reduce_step + ":\t" + concrete(t))
       reduce_step += 1
-      val tpl = reduce(t)
-      tpl._2 match {
+      val step = reduce(t)
+      step.s match {
         case Normal =>
-//          println("@Normal form: " + concrete(clear(t)))
-        case Reducible => run_helper(tpl._1)
+          println("total step: " + reduce_step)
+          println("@Normal form: " + concrete(clear(t)))
+        case Reducible => run_helper(step)
       }
     }
     println("\ntest" + cnt + ":")
     run_helper(t)
-    println(reduce_step)
     cnt += 1
   }
 
@@ -265,7 +310,6 @@ object myLC {
   val z = Var("z")
   val a = Var("a")
   //check alpha-conversion
-
   //test0
   run(App(Fun("x", Fun("x", Var("x"))), LCTrue()))
   println(concrete(LCId()))//shadowing ok
@@ -357,17 +401,17 @@ object myLC {
   println("LCZero")
   run(App(LCPred(), Church(4)))
   println("LCFour")
-      run(App(App(LCSub(), Church(7)), Church(2)))
+  run(App(App(LCSub(), Church(7)), Church(2)))
   println("LCFive")
-      run(App(App(LCSub(), Church(3)), Church(5)))
+  run(App(App(LCSub(), Church(3)), Church(5)))
   println("LCZero")
-      run(App(App(LCEqual(), Church(0)), Church(0)))
+  run(App(App(LCEqual(), Church(0)), Church(0)))
   println("LCTrue")
-      run(App(App(LCEqual(), Church(5)), Church(5)))
+  run(App(App(LCEqual(), Church(5)), Church(5)))
   println("LCTrue")
-      run(App(App(LCEqual(), Church(3)), Church(8)))
+  run(App(App(LCEqual(), Church(3)), Church(8)))
   println("LCFalse")
-      run(App(App(LCEqual(), Church(10)), Church(6)))
+  run(App(App(LCEqual(), Church(10)), Church(6)))
   println("LCFalse")
 
   println("\n<Recursion>")
