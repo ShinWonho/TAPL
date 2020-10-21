@@ -233,10 +233,10 @@ def concrete(t:term):String = t match {
 def big_step(t:term):String = {
   var prev = t
   var res = t
-//    var cnt = 0
+    var cnt = 0
   do {
-//        println(cnt + ": " + concrete(res))
-//        cnt = cnt + 1
+        println(cnt + ": " + concrete(res))
+        cnt = cnt + 1
     do {
       prev = res
       res = small_step(prev)
@@ -319,31 +319,31 @@ def big_step(t:term):String = {
 //big_step(App(App(Sub(), Church(7)), Church(2)))
 ////Five
 //big_step(App(App(Sub(), Church(3)), Church(5)))
-////Zero
+//Zero
 //big_step(App(App(Equal(), Church(0)), Church(0)))
 ////True
 //big_step(App(App(Equal(), Church(5)), Church(5)))
 ////True
 //big_step(App(App(Equal(), Church(3)), Church(8)))
 ////False
-//big_step(App(App(Equal(), Church(10)), Church(6)))
-////False
-
-val list1 = App(App(Cons(), Church(3)), App(App(Cons(), Church(2)), EmptyList()))
-big_step(list1)
-big_step(App(Head(), list1))
-//Three
-big_step(App(IsNil(), EmptyList()))
-//True
-big_step(App(IsNil(), list1))
+big_step(App(App(Equal(), Church(10)), Church(6)))
 //False
-big_step(App(PopFront(), list1))
-//{^c.{^n.c Two n}}
-big_step(App(Tail(), list1))
-//{^c.{^n.c Two n}}
-val list2 = App(App(Cons(), EmptyList()), App(App(Cons(), Church(4)), list1))
-big_step(list2)
-big_step(App(PopFront(), list2))
-//{^c.{^n.c Four (c Three (c Two n))}}
-big_step(App(Tail(), list2))
-//{^c.{^n.c Two n}}
+
+//val list1 = App(App(Cons(), Church(3)), App(App(Cons(), Church(2)), EmptyList()))
+//big_step(list1)
+//big_step(App(Head(), list1))
+////Three
+//big_step(App(IsNil(), EmptyList()))
+////True
+//big_step(App(IsNil(), list1))
+////False
+//big_step(App(PopFront(), list1))
+////{^c.{^n.c Two n}}
+//big_step(App(Tail(), list1))
+////{^c.{^n.c Two n}}
+//val list2 = App(App(Cons(), EmptyList()), App(App(Cons(), Church(4)), list1))
+//big_step(list2)
+//big_step(App(PopFront(), list2))
+////{^c.{^n.c Four (c Three (c Two n))}}
+//big_step(App(Tail(), list2))
+////{^c.{^n.c Two n}}
