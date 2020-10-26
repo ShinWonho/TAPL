@@ -84,10 +84,10 @@ object myLC {
   }
 
   def doApp(f: Fun, p: term): term = {
-    //    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
+//        println("\tApp: " + concrete(f) + " " + concrete(p))
     if (contains(p, f.x)) alpha_conversion(f)
-    //    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
-    fresh(substitute(f.t, f.x, new param(p)))
+        println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
+    substitute(f.t, f.x, new param(p))
   }
 
   def reduceApp(a: App): term = a.s match {
@@ -97,7 +97,9 @@ object myLC {
         a.f = reduce(a.f)
         a
       case Normal => a.p.s match {
-        case Normal => a
+        case Normal =>
+          a.s = Normal
+          a
         case Reducible =>
           a.p = reduce(a.p)
           a.s = a.p.s
