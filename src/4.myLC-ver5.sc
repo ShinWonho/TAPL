@@ -72,22 +72,29 @@ object myLC {
     case t: Fun if contains(to, t.x) => substitute(alpha_conversion(t), from, to)
     case t: Fun if t.x == from => t
     case t: Fun =>
+      val prev = t.t.s
       t.t = substitute(t.t, from, to)
+      if (prev != t.t.s) t.s = Reducible
       t
     case t: App =>
+      val prev_f = t.f.s
+      val prev_p = t.p.s
       t.f = substitute(t.f, from, to)
       t.p = substitute(t.p, from, to)
+      if (t.f.s != prev_f || t.p.s != prev_p) t.s = Reducible
       t
     case t: param =>
+      val prev = t.in.s
       t.in = substitute(t.in, from, to)
+      if (prev != t.in.s) t.s = Reducible
       t
   }
 
   def doApp(f: Fun, p: term): term = {
-    //    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
+    //        println("\tApp: " + concrete(f) + " " + concrete(p))
     if (contains(p, f.x)) alpha_conversion(f)
-    //    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
-    fresh(substitute(f.t, f.x, new param(p)))
+    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
+    substitute(f.t, f.x, new param(p))
   }
 
   def reduceApp(a: App): term = a.s match {
@@ -97,7 +104,9 @@ object myLC {
         a.f = reduce(a.f)
         a
       case Normal => a.p.s match {
-        case Normal => a
+        case Normal =>
+          a.s = Normal
+          a
         case Reducible =>
           a.p = reduce(a.p)
           a.s = a.p.s
@@ -132,30 +141,9 @@ object myLC {
     case t => t
   }
 
-  def fresh(t: term): term = {
-    t match {
-      case _: Var => t
-      case t: Fun =>
-        t.s = Reducible
-        fresh(t.t)
-      case t: App =>
-        t.s = Reducible
-        fresh(t.f)
-        fresh(t.p)
-      case t: param =>
-        t.s = Reducible
-        fresh(t.in)
-    }
-    t
-  }
-
-  def fresh(t: Fun): Fun = fresh(t: term) match {
-    case t: Fun => t
-  }
-
   def reduce(t: term): term = {
     var res: term = t
-//        println("\t\treduce begin (" + concrete(t) + ")")
+//    println("\t\treduce begin (" + concrete(t) + ")")
     t match {
       case _: Var =>
       case t: Fun => t.s match {
@@ -165,30 +153,31 @@ object myLC {
           t.s = t.t.s
       }
       case t: App => t.f match {
-        case f: Fun => res = doApp(fresh(f), t.p)
+        case f: Fun => res = doApp(f, t.p)
         case p: param => peel(p) match {
           case f: Fun => res = doApp(deepcopy(f), t.p)
           case _ => res = reduceApp(t)
         }
         case _ => res = reduceApp(t)
       }
-      case t: param => t.s match {
-        case Normal => t.in = peel(t)
-        case Reducible =>
-          t.in = peel(t)
-          t.in = reduce(t.in)
-          t.s = t.in.s
-          t.s match {
-            case Normal =>
-              t.in match {
-                case _: Fun => res = deepcopy (t.in)
-                case _ =>
-              }
-            case Reducible =>
-          }
+      case t: param =>
+        t.s match {
+          case Normal => t.in = peel(t)
+          case Reducible =>
+            t.in = peel(t)
+            t.in = reduce(t.in)
+            t.s = t.in.s
+            t.s match {
+              case Normal =>
+                t.in match {
+                  case _: Fun => res = deepcopy (t.in)
+                  case _ =>
+                }
+              case Reducible =>
+            }
+        }
       }
-    }
-//        println("\t\treduce end (" + concrete(t) + ")")
+//    println("\t\treduce end (" + concrete(res) + ")")
     res
   }
 
@@ -199,19 +188,24 @@ object myLC {
     @tailrec
     def run_helper(t: term): Unit = {
       //      if (reduce_step > 300) return
-            println(reduce_step + ":\t" + concrete(t))
+      println(reduce_step + ":\t" + concrete(t))
       reduce_step += 1
       val step = reduce(t)
       step.s match {
         case Normal =>
           println("total step: " + reduce_step)
-          println("@Normal form: " + concrete(clear(t)))
+          println("@Normal form: " + concrete(clear(step)))
         case Reducible => run_helper(step)
       }
     }
     println("\ntest" + cnt + ":")
     run_helper(t)
     cnt += 1
+  }
+
+  def concrete(s: state): String = s match {
+    case Normal => "n"
+    case Reducible => "r"
   }
 
   def concrete(t: term): String = t match {
@@ -400,7 +394,7 @@ object myLC {
   run(App(LCPred(), Church(0)))
   println("LCZero")
   run(App(LCPred(), Church(4)))
-  println("LCFour")
+  println("LCThree")
   run(App(App(LCSub(), Church(7)), Church(2)))
   println("LCFive")
   run(App(App(LCSub(), Church(3)), Church(5)))
