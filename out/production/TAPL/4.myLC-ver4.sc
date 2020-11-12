@@ -2,23 +2,29 @@ import scala.annotation.tailrec
 
 object myLC {
 
-  trait term
+  trait term {
+    var s: state
+  }
 
-  class Var(s: String) extends term {
-    var x = s
+  class Var(name: String) extends term {
+    var s: state = Normal
+    var x = name
   }
 
   class Fun(name: String, term: term) extends term {
+    var s: state = Reducible
     var x = name
     var t = term
   }
 
   class App(func: term, param: term) extends term {
+    var s: state = Reducible
     var f = func
     var p = param
   }
 
   class param(term: term) extends term {
+    var s: state = Reducible
     var in = term
   }
 
@@ -40,10 +46,10 @@ object myLC {
       case t: param => alpha_conversion_helper(t.in)
       case _ =>
     }
-//    println("\talpha conversion: " + concrete(t) + "[" + from + "->" + to + "]")
+    //    println("\talpha conversion: " + concrete(t) + "[" + from + "->" + to + "]")
     alpha_conversion_helper(t.t)
     t.x = to
-//    println("\t                ->" + concrete(t))
+    //    println("\t                ->" + concrete(t))
     alpha += 1
     t
   }
@@ -78,56 +84,111 @@ object myLC {
   }
 
   def doApp(f: Fun, p: term): term = {
-//    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
+    //    println("\tApp: " + concrete(f) + "\n\t    " + concrete(p))
     if (contains(p, f.x)) alpha_conversion(f)
-//    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
-    substitute(f.t, f.x, new param(p))
+    //    println("\tsubstitution: " + concrete(f.t) + "[" + f.x + "->" + concrete(p) + "]")
+    fresh(substitute(f.t, f.x, new param(p)))
+  }
+
+  def reduceApp(a: App): term = a.s match {
+    case Normal => a
+    case Reducible => a.f.s match {
+      case Reducible =>
+        a.f = reduce(a.f)
+        a
+      case Normal => a.p.s match {
+        case Normal => a
+        case Reducible =>
+          a.p = reduce(a.p)
+          a.s = a.p.s
+          a
+      }
+    }
+  }
+
+  def deepcopy(t: Fun): Fun = deepcopy(t: term) match {
+    case t: Fun => t
   }
 
   def deepcopy(t: term): term = t match {
     case t: Var => new Var(t.x)
-    case t: Fun => new Fun(t.x, deepcopy(t.t))
-    case t: App => new App(deepcopy(t.f), deepcopy(t.p))
-    case t: param => new param(deepcopy(t.in))
+    case t: Fun =>
+      val res = new Fun(t.x, deepcopy(t.t))
+      res.s = t.s
+      res
+    case t: App =>
+      val res = new App(deepcopy(t.f), deepcopy(t.p))
+      res.s = t.s
+      res
+    case t: param =>
+      val res = new param(deepcopy(t.in))
+      res.s = t.s
+      res
   }
 
-  def reduce(t: term): (term, state) = {
-    var res: (term, state) = (t, Normal)
-//    println("\t\treduce begin (" + concrete(t) + ")")
+  @tailrec
+  def peel(p: param): term = p.in match {
+    case p: param => peel(p)
+    case t => t
+  }
+
+  def fresh(t: term): term = {
     t match {
-      case t: Var => res = (t, Normal)
+      case _: Var => t
       case t: Fun =>
-        val tpl = reduce(t.t)
-        t.t = tpl._1
-        res = (t, tpl._2)
+        t.s = Reducible
+        fresh(t.t)
       case t: App =>
-        val tpl = reduce(t.f)
-        t.f = tpl._1
-        tpl._2 match {
-          case Reducible => res = (t, Reducible)
-          case Normal => t.f match {
-            case f: Fun => res = (doApp(f, t.p), Reducible)
-            case _ =>
-              val tpl2 = reduce(t.p)
-              t.p = tpl2._1
-              res = (t, tpl2._2)
-          }
-        }
+        t.s = Reducible
+        fresh(t.f)
+        fresh(t.p)
       case t: param =>
-        val tpl = reduce(t.in)
-        t.in = tpl._1
-        tpl._2 match {
-          case Normal =>
-            //          val p = shallow_clear(t)
-            tpl._1 match {
-              case p: param => res = (tpl._1, Reducible)
-              case _: Fun => res = (deepcopy (tpl._1), Normal)
-              case _ => res = (t, Normal)
-            }
-          case Reducible => res = (t, Reducible)
-        }
+        t.s = Reducible
+        fresh(t.in)
     }
-//    println("\t\treduce end (" + concrete(t) + ")")
+    t
+  }
+
+  def fresh(t: Fun): Fun = fresh(t: term) match {
+    case t: Fun => t
+  }
+
+  def reduce(t: term): term = {
+    var res: term = t
+//        println("\t\treduce begin (" + concrete(t) + ")")
+    t match {
+      case _: Var =>
+      case t: Fun => t.s match {
+        case Normal =>
+        case Reducible =>
+          t.t = reduce(t.t)
+          t.s = t.t.s
+      }
+      case t: App => t.f match {
+        case f: Fun => res = doApp(fresh(f), t.p)
+        case p: param => peel(p) match {
+          case f: Fun => res = doApp(deepcopy(f), t.p)
+          case _ => res = reduceApp(t)
+        }
+        case _ => res = reduceApp(t)
+      }
+      case t: param => t.s match {
+        case Normal => t.in = peel(t)
+        case Reducible =>
+          t.in = peel(t)
+          t.in = reduce(t.in)
+          t.s = t.in.s
+          t.s match {
+            case Normal =>
+              t.in match {
+                case _: Fun => res = deepcopy (t.in)
+                case _ =>
+              }
+            case Reducible =>
+          }
+      }
+    }
+//        println("\t\treduce end (" + concrete(t) + ")")
     res
   }
 
@@ -137,17 +198,18 @@ object myLC {
     var reduce_step = 0
     @tailrec
     def run_helper(t: term): Unit = {
-//      println(reduce_step + ":\t" + concrete(t))
+      //      if (reduce_step > 300) return
+            println(reduce_step + ":\t" + concrete(t))
       reduce_step += 1
-      val tpl = reduce(t)
-      tpl._2 match {
+      val step = reduce(t)
+      step.s match {
         case Normal =>
+          println("total step: " + reduce_step)
           println("@Normal form: " + concrete(clear(t)))
-          println("Total step: " + reduce_step)
-        case Reducible => run_helper(tpl._1)
+        case Reducible => run_helper(step)
       }
     }
-//    println("\ntest" + cnt + ":")
+    println("\ntest" + cnt + ":")
     run_helper(t)
     cnt += 1
   }
@@ -158,9 +220,9 @@ object myLC {
     case t: App =>
       val res = concrete(t.f) + " "
       t.p match {
-      case p: App => res + "(" + concrete(p) + ")"
-      case _ => res + concrete(t.p)
-    }
+        case p: App => res + "(" + concrete(p) + ")"
+        case _ => res + concrete(t.p)
+      }
     case t: param => "<" + concrete(t.in) + ">"
   }
 
@@ -237,144 +299,124 @@ object myLC {
   def LCfactorial(): term = App(fix(), fact())
 
 
-//  run(App(App(App(LCIf(), LCTrue()), LCTrue()), LCFalse()))
-//  run(App(Fun("y", {val a = new Var("y"); App(a, a)}), App(App(App(LCIf(), LCTrue()), LCId()), LCFalse())))
+  //  run(App(App(App(LCIf(), LCTrue()), LCTrue()), LCFalse()))
+  //  run(App(Fun("y", {val a = new Var("y"); App(a, a)}), App(App(App(LCIf(), LCTrue()), LCId()), LCFalse())))
 
-//  val x1 = Var("x")
-//  val x2 = Var("x")
-//  val x3 = Var("x")
-//  val y1 = Var("y")
-//  val y2 = Var("y")
-//  val z = Var("z")
-//  val a = Var("a")
-//  //check alpha-conversion
-//  //test0
-//  run(App(Fun("x", Fun("x", Var("x"))), LCTrue()))
-//  println(concrete(LCId()))//shadowing ok
-//  run(App(Fun("x", App(Fun("x", Var("x")), App(x1, x1))), LCTrue()))
-//  println()
-//  run(App(Fun("x", Var("x")), Fun("x", Var("x"))))//no alpha conversion
-//
-//  //test3
-//    run(LCId())
-//    println("Id")
-//    run(App(LCId(), LCId()))
-//    println("Id")
-//
-//  //test5
-//    run(App(App(LCTrue(), LCId()), LCId()))
-//    println("Id")
-//    run(App(App(Fun("x", Fun("y", Var("x"))), LCTrue()), LCFalse()))
-//    println("LCTrue")
-//    run(App(App(App(LCIf(), LCTrue()), LCTrue()), LCFalse()))
-//    println("LCTrue")
-//
-//  //test8
-//    println("\n<LCAND>")
-//    run(App(App(LCAnd, LCTrue()), LCTrue()))
-//    println("LCTrue")
-//    run(App(App(LCAnd, LCTrue()), LCFalse()))
-//    println("LCFalse")
-//    run(App(App(LCAnd, LCFalse()), LCTrue()))
-//    println("LCFalse")
-//    run(App(App(LCAnd, LCFalse()), LCFalse()))
-//    println("LCFalse")
-//    println("\n<LCOR>")
-//    run(App(App(LCOr(), LCTrue()), LCTrue()))
-//    println("LCTrue")
-//    run(App(App(LCOr(), LCTrue()), LCFalse()))
-//    println("LCTrue")
-//    run(App(App(LCOr(), LCFalse()), LCTrue()))
-//    println("LCTrue")
-//    run(App(App(LCOr(), LCFalse()), LCFalse()))
-//    println("LCFalse")
-//    println("\n<LCNOT>")
-//    run(App(LCNot(), LCTrue()))
-//    println("LCFalse")
-//    run(App(LCNot(), LCFalse()))
-//    println("LCTrue")
-//
-//  //test18
-//    println("\n<LCPair>")
-//    run(App(LCFirst(), App(App(LCPair(), LCTrue()), LCFalse())))
-//    println("LCTrue")
-//    run(App(LCSecond(), App(App(LCPair(), LCTrue()), LCFalse())))
-//    println("LCFalse")
-//
-//  //test20
-//    println("\n<LCSucc>")
-//    run(Church(0))
-//    println("LCZero")
-//    run(App(LCSucc(),Church(0)))
-//    println("LCOne")
-//    run(App(LCSucc(), App(LCSucc(),Church(0))))
-//    println("LCTwo")
-//    run(App(LCSucc(), App(LCSucc(), App(LCSucc(),Church(0)))))
-//    println("LCThree")
-//    println("\n<LCPlus>")
-//    run(App(App(LCPlus(), Church(0)), Church(0)))
-//    println("LCZero")
-//    run(App(App(LCPlus(), Church(0)), Church(1)))
-//    println("LCOne")
-//    run(App(App(LCPlus(), Church(3)), Church(4)))
-//    println("LCSeven")
-//    println("\n<LCMult>")
-//    run(App(App(LCMult(), Church(1)), Church(2)))
-//    println("LCTwo")
-//    run(App(App(LCMult(), Church(2)), Church(4)))
-//    println("LCEight")
-//    println("\n<LCPower>")
-//    run(App(App(LCPower(), Church(2)), Church(2)))
-//    println("LCFour")
-//    run(App(App(LCPower(), Church(3)), Church(2)))
-//    println("LCNine")
-//
-//  //test31
-//    println("\n<Eq/Sub>")
-//    run(App(LCIsZero(), Church(0)))
-//    println("LCTrue")
-//    run(App(LCIsZero(), Church(4)))
-//    println("LCFalse")
-//    run(App(LCPred(), Church(0)))
-//    println("LCZero")
-//    run(App(LCPred(), Church(4)))
-//    println("LCFour")
-////    run(App(App(LCSub(), Church(7)), Church(2)))
-//    println("LCFive")
-////    run(App(App(LCSub(), Church(3)), Church(5)))
-//    println("LCZero")
-////    run(App(App(LCEqual(), Church(0)), Church(0)))
-//    println("LCTrue")
-////    run(App(App(LCEqual(), Church(5)), Church(5)))
-//    println("LCTrue")
-////    run(App(App(LCEqual(), Church(3)), Church(8)))
-//    println("LCFalse")
-////    run(App(App(LCEqual(), Church(10)), Church(6)))
-//    println("LCFalse")
-//
-//    println("\n<Recursion>")
-//    run(App(LCfactorial(), Church(2)))
-//    println("LCTwo")
+  val x1 = Var("x")
+  val x2 = Var("x")
+  val x3 = Var("x")
+  val y1 = Var("y")
+  val y2 = Var("y")
+  val z = Var("z")
+  val a = Var("a")
+  //check alpha-conversion
+  //test0
+  run(App(Fun("x", Fun("x", Var("x"))), LCTrue()))
+  println(concrete(LCId()))//shadowing ok
+  run(App(Fun("x", App(Fun("x", Var("x")), App(x1, x1))), LCTrue()))
+  println()
+  run(App(Fun("x", Var("x")), Fun("x", Var("x"))))//no alpha conversion
 
-  println("<applicative order2>\n")
+  //test3
+  run(LCId())
+  println("Id")
+  run(App(LCId(), LCId()))
+  println("Id")
 
-  println("if(true) true else false:")
+  //test5
+  run(App(App(LCTrue(), LCId()), LCId()))
+  println("Id")
+  run(App(App(Fun("x", Fun("y", Var("x"))), LCTrue()), LCFalse()))
+  println("LCTrue")
   run(App(App(App(LCIf(), LCTrue()), LCTrue()), LCFalse()))
+  println("LCTrue")
 
-  println("\n3^2:")
+  //test8
+  println("\n<LCAND>")
+  run(App(App(LCAnd, LCTrue()), LCTrue()))
+  println("LCTrue")
+  run(App(App(LCAnd, LCTrue()), LCFalse()))
+  println("LCFalse")
+  run(App(App(LCAnd, LCFalse()), LCTrue()))
+  println("LCFalse")
+  run(App(App(LCAnd, LCFalse()), LCFalse()))
+  println("LCFalse")
+  println("\n<LCOR>")
+  run(App(App(LCOr(), LCTrue()), LCTrue()))
+  println("LCTrue")
+  run(App(App(LCOr(), LCTrue()), LCFalse()))
+  println("LCTrue")
+  run(App(App(LCOr(), LCFalse()), LCTrue()))
+  println("LCTrue")
+  run(App(App(LCOr(), LCFalse()), LCFalse()))
+  println("LCFalse")
+  println("\n<LCNOT>")
+  run(App(LCNot(), LCTrue()))
+  println("LCFalse")
+  run(App(LCNot(), LCFalse()))
+  println("LCTrue")
+
+  //test18
+  println("\n<LCPair>")
+  run(App(LCFirst(), App(App(LCPair(), LCTrue()), LCFalse())))
+  println("LCTrue")
+  run(App(LCSecond(), App(App(LCPair(), LCTrue()), LCFalse())))
+  println("LCFalse")
+
+  //test20
+  println("\n<LCSucc>")
+  run(Church(0))
+  println("LCZero")
+  run(App(LCSucc(),Church(0)))
+  println("LCOne")
+  run(App(LCSucc(), App(LCSucc(),Church(0))))
+  println("LCTwo")
+  run(App(LCSucc(), App(LCSucc(), App(LCSucc(),Church(0)))))
+  println("LCThree")
+  println("\n<LCPlus>")
+  run(App(App(LCPlus(), Church(0)), Church(0)))
+  println("LCZero")
+  run(App(App(LCPlus(), Church(0)), Church(1)))
+  println("LCOne")
+  run(App(App(LCPlus(), Church(3)), Church(4)))
+  println("LCSeven")
+  println("\n<LCMult>")
+  run(App(App(LCMult(), Church(1)), Church(2)))
+  println("LCTwo")
+  run(App(App(LCMult(), Church(2)), Church(4)))
+  println("LCEight")
+  println("\n<LCPower>")
+  run(App(App(LCPower(), Church(2)), Church(2)))
+  println("LCFour")
   run(App(App(LCPower(), Church(3)), Church(2)))
+  println("LCNine")
 
-  println("\n3 - 5:")
+  //test31
+  println("\n<Eq/Sub>")
+  run(App(LCIsZero(), Church(0)))
+  println("LCTrue")
+  run(App(LCIsZero(), Church(4)))
+  println("LCFalse")
+  run(App(LCPred(), Church(0)))
+  println("LCZero")
+  run(App(LCPred(), Church(4)))
+  println("LCFour")
+  run(App(App(LCSub(), Church(7)), Church(2)))
+  println("LCFive")
   run(App(App(LCSub(), Church(3)), Church(5)))
-
-  println("\n10 == 6:")
+  println("LCZero")
+  run(App(App(LCEqual(), Church(0)), Church(0)))
+  println("LCTrue")
+  run(App(App(LCEqual(), Church(5)), Church(5)))
+  println("LCTrue")
+  run(App(App(LCEqual(), Church(3)), Church(8)))
+  println("LCFalse")
   run(App(App(LCEqual(), Church(10)), Church(6)))
+  println("LCFalse")
 
-  println("\n6 == 10:")
-  run(App(App(LCEqual(), Church(6)), Church(10)))
-
-  println("\n2!:")
+  println("\n<Recursion>")
   run(App(LCfactorial(), Church(2)))
+  println("LCTwo")
 
 }
 
